@@ -848,7 +848,11 @@ func (p *HTTPProxyProcessor) computeRoutes(
 		}
 
 		if p.EnableStatPrefix {
-			r.StatPrefix = ref.To(fmt.Sprintf("%s_%s", proxy.Namespace, proxy.Name))
+			path := "_"
+			if len(route.Conditions) > 0 && route.Conditions[0].Prefix != "" {
+				path = strings.TrimPrefix(route.Conditions[0].Prefix, "/")
+			}
+			r.StatPrefix = ref.To(fmt.Sprintf("%s_%s_%s", proxy.Namespace, proxy.Name, path))
 		}
 
 		// If the enclosing root proxy enabled authorization,
