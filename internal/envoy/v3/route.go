@@ -657,7 +657,7 @@ func weightedClusters(route *dag.Route) *envoy_route_v3.WeightedCluster {
 // VirtualHost creates a new route.VirtualHost.
 func VirtualHost(hostname string, routes ...*envoy_route_v3.Route) *envoy_route_v3.VirtualHost {
 	return &envoy_route_v3.VirtualHost{
-		Name:    envoy.Hashname(60, hostname),
+		Name:    envoy.Hashname(120, hostname),
 		Domains: []string{hostname},
 		Routes:  routes,
 	}
