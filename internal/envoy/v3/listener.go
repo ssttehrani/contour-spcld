@@ -49,6 +49,7 @@ import (
 	"github.com/projectcontour/contour/internal/timeout"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"os"
 )
 
 type HTTPVersionType = http.HttpConnectionManager_CodecType
@@ -714,6 +715,11 @@ func FilterChains(filters ...*envoy_listener_v3.Filter) []*envoy_listener_v3.Fil
 }
 
 func FilterMisdirectedRequests(fqdn string) *http.HttpFilter {
+	disableMisdirectedFilter := os.Getenv("DISABLE_MISDIRECTED_FILTER")
+	if strings.ToLower(disableMisdirectedFilter) == "true" {
+		return nil
+	}
+
 	var target string
 
 	// fqdn can be "*" to match all hostnames or a wildcard prefix
