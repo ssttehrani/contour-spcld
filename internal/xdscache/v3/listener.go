@@ -19,7 +19,6 @@ import (
 
 	envoy_accesslog_v3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	envoy_listener_v3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	envoy_router_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	http "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
@@ -34,6 +33,7 @@ import (
 	"github.com/projectcontour/contour/pkg/config"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/types"
+	"strings"
 )
 
 // nolint:revive
@@ -364,20 +364,6 @@ func (c *ListenerCache) OnChange(root *dag.DAG) {
 	cfg := c.Config
 	listeners := map[string]*envoy_listener_v3.Listener{}
 
-	//max := func(a, b envoy_tls_v3.TlsParameters_TlsProtocol) envoy_tls_v3.TlsParameters_TlsProtocol {
-	//	if a > b {
-	//		return a
-	//	}
-	//	return b
-	//}
-	//
-	//min := func(a, b envoy_tls_v3.TlsParameters_TlsProtocol) envoy_tls_v3.TlsParameters_TlsProtocol {
-	//	if a < b {
-	//		return a
-	//	}
-	//	return b
-	//}
-
 	socketOptions := envoy_v3.NewSocketOptions().TCPKeepalive()
 	if cfg.SocketOptions != nil {
 		socketOptions = socketOptions.TOS(cfg.SocketOptions.TOS).TrafficClass(cfg.SocketOptions.TrafficClass)
@@ -438,45 +424,29 @@ func (c *ListenerCache) OnChange(root *dag.DAG) {
 			)
 		}
 
-		// If there are TLS vhosts, add a listener to which we
-		// will attach a filter chain per vhost matching on SNI,
-		// plus possibly one fallback cert filter chain.
+		// If there are TLS vhosts, add another listener with a single filter chain.
 		if len(listener.SecureVirtualHosts) > 0 {
-			//listeners[listener.Name] = envoy_v3.Listener(
-			//	listener.Name,
-			//	listener.Address,
-			//	listener.Port,
-			//	cfg.PerConnectionBufferLimitBytes,
-			//	socketOptions,
-			//	secureProxyProtocol(cfg.UseProxyProto),
-			//)
 			cm := envoy_v3.HTTPConnectionManagerBuilder().
 				Codec(envoy_v3.CodecForVersions(cfg.DefaultHTTPVersions...)).
-				//DefaultFilters().
-				AddFilter(&http.HttpFilter{
-					Name: "router",
-					ConfigType: &http.HttpFilter_TypedConfig{
-						TypedConfig: protobuf.MustMarshalAny(&envoy_router_v3.Router{}),
-					},
-				}).
+				DefaultFilters().
 				RouteConfigName("ingress_https").
 				MetricsPrefix(listener.Name).
-				//AccessLoggers(cfg.newInsecureAccessLog()).
-				//RequestTimeout(cfg.Timeouts.Request).
-				//ConnectionIdleTimeout(cfg.Timeouts.ConnectionIdle).
-				//StreamIdleTimeout(cfg.Timeouts.StreamIdle).
-				//DelayedCloseTimeout(cfg.Timeouts.DelayedClose).
-				//MaxConnectionDuration(cfg.Timeouts.MaxConnectionDuration).
-				//ConnectionShutdownGracePeriod(cfg.Timeouts.ConnectionShutdownGracePeriod).
-				//AllowChunkedLength(cfg.AllowChunkedLength).
-				//MergeSlashes(cfg.MergeSlashes).
-				//ServerHeaderTransformation(cfg.ServerHeaderTransformation).
-				//NumTrustedHops(cfg.XffNumTrustedHops).
-				//MaxRequestsPerConnection(cfg.MaxRequestsPerConnection).
-				//AddFilter(httpGlobalExternalAuthConfig(cfg.GlobalExternalAuthConfig)).
-				//Tracing(envoy_v3.TracingConfig(envoyTracingConfig(cfg.TracingConfig))).
-				//AddFilter(envoy_v3.GlobalRateLimitFilter(envoyGlobalRateLimitConfig(cfg.RateLimitConfig))).
-				//EnableWebsockets(listener.EnableWebsockets).
+				AccessLoggers(cfg.newInsecureAccessLog()).
+				RequestTimeout(cfg.Timeouts.Request).
+				ConnectionIdleTimeout(cfg.Timeouts.ConnectionIdle).
+				StreamIdleTimeout(cfg.Timeouts.StreamIdle).
+				DelayedCloseTimeout(cfg.Timeouts.DelayedClose).
+				MaxConnectionDuration(cfg.Timeouts.MaxConnectionDuration).
+				ConnectionShutdownGracePeriod(cfg.Timeouts.ConnectionShutdownGracePeriod).
+				AllowChunkedLength(cfg.AllowChunkedLength).
+				MergeSlashes(cfg.MergeSlashes).
+				ServerHeaderTransformation(cfg.ServerHeaderTransformation).
+				NumTrustedHops(cfg.XffNumTrustedHops).
+				MaxRequestsPerConnection(cfg.MaxRequestsPerConnection).
+				AddFilter(httpGlobalExternalAuthConfig(cfg.GlobalExternalAuthConfig)).
+				Tracing(envoy_v3.TracingConfig(envoyTracingConfig(cfg.TracingConfig))).
+				AddFilter(envoy_v3.GlobalRateLimitFilter(envoyGlobalRateLimitConfig(cfg.RateLimitConfig))).
+				EnableWebsockets(listener.EnableWebsockets).
 				Get()
 
 			listeners[listener.Name] = envoy_v3.Listener(
@@ -485,15 +455,11 @@ func (c *ListenerCache) OnChange(root *dag.DAG) {
 				listener.Port,
 				cfg.PerConnectionBufferLimitBytes,
 				socketOptions,
-				proxyProtocol(cfg.UseProxyProto),
-				//secureProxyProtocol(cfg.UseProxyProto),
+				secureProxyProtocol(cfg.UseProxyProto),
 			)
 
 			fc := &envoy_listener_v3.FilterChain{
 				Filters: envoy_v3.Filters(cm),
-				//FilterChainMatch: &envoy_listener_v3.FilterChainMatch{
-				//	TransportProtocol: "tls",
-				//},
 				TransportSocket: envoy_v3.DownstreamTLSTransportSocket(envoy_v3.DownstreamTLSContext(
 					listener.SecureVirtualHosts[0].Secret,
 					cfg.minTLSVersion(),
@@ -503,139 +469,51 @@ func (c *ListenerCache) OnChange(root *dag.DAG) {
 					"h2", "http/1.1",
 				)),
 			}
-
+			//filters = envoy_v3.Filters(envoy_v3.TCPProxy(listener.Name, vh.TCPProxy, cfg.newSecureAccessLog()))
 			listeners[listener.Name].FilterChains = append(listeners[listener.Name].FilterChains, fc)
 		}
 
-		//for _, vh := range listener.SecureVirtualHosts {
-		//	var alpnProtos []string
-		//	var filters []*envoy_listener_v3.Filter
-		//
-		//	var forwardClientCertificate *dag.ClientCertificateDetails
-		//	if vh.DownstreamValidation != nil {
-		//		forwardClientCertificate = vh.DownstreamValidation.ForwardClientCertificate
-		//	}
-		//
-		//	if vh.TCPProxy == nil {
-		//		var authFilter *http.HttpFilter
-		//
-		//		if vh.ExternalAuthorization != nil {
-		//			authFilter = envoy_v3.FilterExternalAuthz(vh.ExternalAuthorization)
-		//		}
-		//
-		//		// Create a uniquely named HTTP connection manager for
-		//		// this vhost, so that the SNI name the client requests
-		//		// only grants access to that host. See RFC 6066 for
-		//		// security advice. Note that we still use the generic
-		//		// metrics prefix to keep compatibility with previous
-		//		// Contour versions since the metrics prefix will be
-		//		// coded into monitoring dashboards.
-		//		cm := envoy_v3.HTTPConnectionManagerBuilder().
-		//			Codec(envoy_v3.CodecForVersions(cfg.DefaultHTTPVersions...)).
-		//			AddFilter(envoy_v3.FilterMisdirectedRequests(vh.VirtualHost.Name)).
-		//			DefaultFilters().
-		//			AddFilter(authFilter).
-		//			AddFilter(envoy_v3.FilterJWTAuth(vh.JWTProviders)).
-		//			RouteConfigName(httpsRouteConfigName(listener, vh.VirtualHost.Name)).
-		//			MetricsPrefix(listener.Name).
-		//			AccessLoggers(cfg.newSecureAccessLog()).
-		//			RequestTimeout(cfg.Timeouts.Request).
-		//			ConnectionIdleTimeout(cfg.Timeouts.ConnectionIdle).
-		//			StreamIdleTimeout(cfg.Timeouts.StreamIdle).
-		//			DelayedCloseTimeout(cfg.Timeouts.DelayedClose).
-		//			MaxConnectionDuration(cfg.Timeouts.MaxConnectionDuration).
-		//			ConnectionShutdownGracePeriod(cfg.Timeouts.ConnectionShutdownGracePeriod).
-		//			AllowChunkedLength(cfg.AllowChunkedLength).
-		//			MergeSlashes(cfg.MergeSlashes).
-		//			ServerHeaderTransformation(cfg.ServerHeaderTransformation).
-		//			NumTrustedHops(cfg.XffNumTrustedHops).
-		//			Tracing(envoy_v3.TracingConfig(envoyTracingConfig(cfg.TracingConfig))).
-		//			AddFilter(envoy_v3.GlobalRateLimitFilter(envoyGlobalRateLimitConfig(cfg.RateLimitConfig))).
-		//			ForwardClientCertificate(forwardClientCertificate).
-		//			MaxRequestsPerConnection(cfg.MaxRequestsPerConnection).
-		//			EnableWebsockets(listener.EnableWebsockets).
-		//			Get()
-		//
-		//		filters = envoy_v3.Filters(cm)
-		//
-		//		alpnProtos = envoy_v3.ProtoNamesForVersions(cfg.DefaultHTTPVersions...)
-		//	} else {
-		//		filters = envoy_v3.Filters(envoy_v3.TCPProxy(listener.Name, vh.TCPProxy, cfg.newSecureAccessLog()))
-		//
-		//		// Do not offer ALPN for TCP proxying, since
-		//		// the protocols will be provided by the TCP
-		//		// backend in its ServerHello.
-		//	}
-		//
-		//	var downstreamTLS *envoy_tls_v3.DownstreamTlsContext
-		//
-		//	// Secret is provided when TLS is terminated and nil when TLS passthrough is used.
-		//	if vh.Secret != nil {
-		//		// Choose the higher of the configured or requested TLS version.
-		//		minVer := max(cfg.minTLSVersion(), envoy_v3.ParseTLSVersion(vh.MinTLSVersion))
-		//
-		//		// Choose the lower of the configured or requested TLS version.
-		//		maxVer := min(cfg.maxTLSVersion(), envoy_v3.ParseTLSVersion(vh.MaxTLSVersion))
-		//		if maxVer == envoy_tls_v3.TlsParameters_TLS_AUTO {
-		//			maxVer = cfg.maxTLSVersion()
-		//		}
-		//
-		//		downstreamTLS = envoy_v3.DownstreamTLSContext(
-		//			vh.Secret,
-		//			minVer,
-		//			maxVer,
-		//			cfg.CipherSuites,
-		//			vh.DownstreamValidation,
-		//			alpnProtos...)
-		//	}
-		//
-		//	listeners[listener.Name].FilterChains = append(listeners[listener.Name].FilterChains, envoy_v3.FilterChainTLS(vh.VirtualHost.Name, downstreamTLS, filters))
-		//
-		//	// If this VirtualHost has enabled the fallback certificate then set a default
-		//	// FilterChain which will allow routes with this vhost to accept non-SNI TLS requests.
-		//	// Note that we don't add the misdirected requests filter on this chain because at this
-		//	// point we don't actually know the full set of server names that will be bound to the
-		//	// filter chain through the ENVOY_FALLBACK_ROUTECONFIG route configuration.
-		//	if vh.FallbackCertificate != nil && !envoy_v3.ContainsFallbackFilterChain(listeners[listener.Name].FilterChains) {
-		//		// Construct the downstreamTLSContext passing the configured fallbackCertificate. The TLS min/max ProtocolVersion will use
-		//		// the value defined in the Contour Configuration file if defined.
-		//		downstreamTLS = envoy_v3.DownstreamTLSContext(
-		//			vh.FallbackCertificate,
-		//			cfg.minTLSVersion(),
-		//			cfg.maxTLSVersion(),
-		//			cfg.CipherSuites,
-		//			vh.DownstreamValidation,
-		//			alpnProtos...,
-		//		)
-		//
-		//		cm := envoy_v3.HTTPConnectionManagerBuilder().
-		//			DefaultFilters().
-		//			RouteConfigName(fallbackCertRouteConfigName(listener)).
-		//			MetricsPrefix(listener.Name).
-		//			AccessLoggers(cfg.newSecureAccessLog()).
-		//			RequestTimeout(cfg.Timeouts.Request).
-		//			ConnectionIdleTimeout(cfg.Timeouts.ConnectionIdle).
-		//			StreamIdleTimeout(cfg.Timeouts.StreamIdle).
-		//			DelayedCloseTimeout(cfg.Timeouts.DelayedClose).
-		//			MaxConnectionDuration(cfg.Timeouts.MaxConnectionDuration).
-		//			ConnectionShutdownGracePeriod(cfg.Timeouts.ConnectionShutdownGracePeriod).
-		//			AllowChunkedLength(cfg.AllowChunkedLength).
-		//			MergeSlashes(cfg.MergeSlashes).
-		//			ServerHeaderTransformation(cfg.ServerHeaderTransformation).
-		//			NumTrustedHops(cfg.XffNumTrustedHops).
-		//			Tracing(envoy_v3.TracingConfig(envoyTracingConfig(cfg.TracingConfig))).
-		//			AddFilter(envoy_v3.GlobalRateLimitFilter(envoyGlobalRateLimitConfig(cfg.RateLimitConfig))).
-		//			ForwardClientCertificate(forwardClientCertificate).
-		//			MaxRequestsPerConnection(cfg.MaxRequestsPerConnection).
-		//			EnableWebsockets(listener.EnableWebsockets).
-		//			Get()
-		//
-		//		// Default filter chain
-		//		filters = envoy_v3.Filters(cm)
-		//
-		//		listeners[listener.Name].FilterChains = append(listeners[listener.Name].FilterChains, envoy_v3.FilterChainTLSFallback(downstreamTLS, filters))
-		//	}
-		//}
+		for _, svh := range listener.SecureVirtualHosts {
+			if !strings.Contains(svh.VirtualHost.Name, "snappcloud.io") {
+				cm := envoy_v3.HTTPConnectionManagerBuilder().
+					Codec(envoy_v3.CodecForVersions(cfg.DefaultHTTPVersions...)).
+					DefaultFilters().
+					RouteConfigName(httpsRouteConfigName(listener, svh.VirtualHost.Name)).
+					MetricsPrefix(listener.Name).
+					AccessLoggers(cfg.newInsecureAccessLog()).
+					RequestTimeout(cfg.Timeouts.Request).
+					ConnectionIdleTimeout(cfg.Timeouts.ConnectionIdle).
+					StreamIdleTimeout(cfg.Timeouts.StreamIdle).
+					DelayedCloseTimeout(cfg.Timeouts.DelayedClose).
+					MaxConnectionDuration(cfg.Timeouts.MaxConnectionDuration).
+					ConnectionShutdownGracePeriod(cfg.Timeouts.ConnectionShutdownGracePeriod).
+					AllowChunkedLength(cfg.AllowChunkedLength).
+					MergeSlashes(cfg.MergeSlashes).
+					ServerHeaderTransformation(cfg.ServerHeaderTransformation).
+					NumTrustedHops(cfg.XffNumTrustedHops).
+					MaxRequestsPerConnection(cfg.MaxRequestsPerConnection).
+					AddFilter(httpGlobalExternalAuthConfig(cfg.GlobalExternalAuthConfig)).
+					Tracing(envoy_v3.TracingConfig(envoyTracingConfig(cfg.TracingConfig))).
+					AddFilter(envoy_v3.GlobalRateLimitFilter(envoyGlobalRateLimitConfig(cfg.RateLimitConfig))).
+					EnableWebsockets(listener.EnableWebsockets).
+					Get()
+				fc := &envoy_listener_v3.FilterChain{
+					FilterChainMatch: &envoy_listener_v3.FilterChainMatch{
+						ServerNames: []string{svh.VirtualHost.Name},
+					},
+					Filters: envoy_v3.Filters(cm),
+					TransportSocket: envoy_v3.DownstreamTLSTransportSocket(envoy_v3.DownstreamTLSContext(
+						svh.Secret,
+						cfg.minTLSVersion(),
+						cfg.maxTLSVersion(),
+						cfg.CipherSuites,
+						nil,
+						"h2", "http/1.1",
+					)),
+				}
+				listeners[listener.Name].FilterChains = append(listeners[listener.Name].FilterChains, fc)
+			}
+		}
 
 		// Remove the https listener if there are no vhosts bound to it.
 		if listener := listeners[listener.Name]; listener != nil && len(listener.FilterChains) == 0 {

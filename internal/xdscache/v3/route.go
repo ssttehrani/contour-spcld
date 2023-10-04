@@ -26,6 +26,7 @@ import (
 	"github.com/projectcontour/contour/internal/protobuf"
 	"github.com/projectcontour/contour/internal/sorter"
 	"google.golang.org/protobuf/proto"
+	"strings"
 )
 
 // RouteCache manages the contents of the gRPC RDS cache.
@@ -129,8 +130,12 @@ func (c *RouteCache) OnChange(root *dag.DAG) {
 				}
 
 				// Add secure vhost route config if not already present.
-				//routeConfigName := httpsRouteConfigName(dagListener, vhost.VirtualHost.Name)
-				routeConfigName := "ingress_https"
+				var routeConfigName string
+				if !strings.Contains(vhost.VirtualHost.Name, "snappcloud.io") {
+					routeConfigName = httpsRouteConfigName(dagListener, vhost.VirtualHost.Name)
+				} else {
+					routeConfigName = "ingress_https"
+				}
 
 				if _, ok := routeConfigs[routeConfigName]; !ok {
 					routeConfigs[routeConfigName] = envoy_v3.RouteConfiguration(routeConfigName)
