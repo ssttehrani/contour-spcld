@@ -39,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	controller_runtime_metrics "sigs.k8s.io/controller-runtime/pkg/metrics"
-	controller_runtime_metrics_server "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayapi_v1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	controller_runtime_metrics_server "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	contour_api_v1alpha1 "github.com/projectcontour/contour/apis/projectcontour/v1alpha1"
@@ -436,6 +436,7 @@ func (s *Server) doServe() error {
 		XffNumTrustedHops:             *contourConfiguration.Envoy.Network.XffNumTrustedHops,
 		ConnectionBalancer:            contourConfiguration.Envoy.Listener.ConnectionBalancer,
 		MaxRequestsPerConnection:      contourConfiguration.Envoy.Listener.MaxRequestsPerConnection,
+		HTTP2MaxConcurrentStreams:     contourConfiguration.Envoy.Listener.HTTP2MaxConcurrentStreams,
 		PerConnectionBufferLimitBytes: contourConfiguration.Envoy.Listener.PerConnectionBufferLimitBytes,
 		SocketOptions:                 contourConfiguration.Envoy.Listener.SocketOptions,
 	}
@@ -464,7 +465,9 @@ func (s *Server) doServe() error {
 		&xdscache_v3.RouteCache{},
 		&xdscache_v3.ClusterCache{},
 		endpointHandler,
-		&xdscache_v3.RuntimeCache{},
+		xdscache_v3.NewRuntimeCache(xdscache_v3.ConfigurableRuntimeSettings{
+			MaxRequestsPerIOCycle: contourConfiguration.Envoy.Listener.MaxRequestsPerIOCycle,
+		}),
 	}
 
 	// snapshotHandler is used to produce new snapshots when the internal state changes for any xDS resource.
@@ -1228,9 +1231,10 @@ func (s *Server) informOnResource(obj client.Object, handler cache.ResourceEvent
 
 	registration, err := inf.AddEventHandler(handler)
 
-	if err == nil {
-		s.handlerCacheSyncs = append(s.handlerCacheSyncs, registration.HasSynced)
+	if err != nil {
+		return err
 	}
 
-	return err
+	s.handlerCacheSyncs = append(s.handlerCacheSyncs, registration.HasSynced)
+	return nil
 }

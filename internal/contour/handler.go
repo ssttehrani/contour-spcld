@@ -19,6 +19,7 @@ package contour
 import (
 	"context"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -59,9 +60,12 @@ type EventHandler struct {
 	// an event has been received.
 	seq int
 
+	// syncTracker is used to update/query the status of the cache sync.
+	// Uses an internal counter: incremented at item start, decremented at end.
+	// HasSynced returns true if its UpstreamHasSynced returns true and the counter is non-positive.
 	syncTracker *synctrack.SingleFileTracker
 
-	initialDagBuilt bool
+	initialDagBuilt atomic.Bool
 }
 
 func NewEventHandler(config EventHandlerConfig, upstreamHasSynced cache.InformerSynced) *EventHandler {
@@ -112,7 +116,7 @@ func (e *EventHandler) NeedLeaderElection() bool {
 }
 
 func (e *EventHandler) HasBuiltInitialDag() bool {
-	return e.initialDagBuilt
+	return e.initialDagBuilt.Load()
 }
 
 // Implements leadership.NeedLeaderElectionNotification
@@ -205,7 +209,7 @@ func (e *EventHandler) Start(ctx context.Context) error {
 			e.observer.OnChange(latestDAG)
 
 			// Allow XDS server to start (if it hasn't already).
-			e.initialDagBuilt = true
+			e.initialDagBuilt.Store(true)
 
 			// Update the status on objects.
 			for _, upd := range latestDAG.StatusCache.GetStatusUpdates() {
