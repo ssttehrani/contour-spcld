@@ -853,7 +853,7 @@ func (p *HTTPProxyProcessor) computeRoutes(
 			if len(route.Conditions) > 0 && route.Conditions[0].Prefix != "" {
 				path = strings.TrimPrefix(route.Conditions[0].Prefix, "/")
 			}
-			r.StatPrefix = ref.To(fmt.Sprintf("%s_%s_%s", proxy.Namespace, proxy.Name, path))
+			r.StatPrefix = ref.To(fmt.Sprintf("%s_httpproxy_%s_path_%s", proxy.Namespace, proxy.Name, path))
 		}
 
 		// If the enclosing root proxy enabled authorization,
