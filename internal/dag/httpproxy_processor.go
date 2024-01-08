@@ -117,6 +117,12 @@ type HTTPProxyProcessor struct {
 
 	// Whether to set StatPrefix on envoy routes or not
 	EnableStatPrefix bool
+	// GlobalCircuitBreakerDefaults defines global circuit breaker defaults.
+	GlobalCircuitBreakerDefaults *contour_api_v1alpha1.GlobalCircuitBreakerDefaults
+
+	// UpstreamTLS defines the TLS settings like min/max version
+	// and cipher suites for upstream connections.
+	UpstreamTLS *UpstreamTLS
 }
 
 // Run translates HTTPProxies into DAG objects and
@@ -495,6 +501,7 @@ func (p *HTTPProxyProcessor) computeHTTPProxy(proxy *contour_api_v1.HTTPProxy) {
 							Port:               port,
 							DNSLookupFamily:    dnsLookupFamily,
 							UpstreamValidation: uv,
+							UpstreamTLS:        p.UpstreamTLS,
 						},
 						CacheDuration: cacheDuration,
 					},
@@ -951,6 +958,7 @@ func (p *HTTPProxyProcessor) computeRoutes(
 					"Spec.Routes unresolved service reference: %s", err)
 				continue
 			}
+			s = serviceCircuitBreakerPolicy(s, p.GlobalCircuitBreakerDefaults)
 
 			// Determine the protocol to use to speak to this Cluster.
 			protocol, err := getProtocol(service, s)
@@ -1044,6 +1052,7 @@ func (p *HTTPProxyProcessor) computeRoutes(
 				SlowStartConfig:               slowStart,
 				MaxRequestsPerConnection:      p.MaxRequestsPerConnection,
 				PerConnectionBufferLimitBytes: p.PerConnectionBufferLimitBytes,
+				UpstreamTLS:                   p.UpstreamTLS,
 			}
 			if service.Mirror && len(r.MirrorPolicies) > 0 {
 				validCond.AddError(contour_api_v1.ConditionTypeServiceError, "OnlyOneMirror",

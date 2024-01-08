@@ -22,10 +22,12 @@ import (
 	"time"
 
 	networking_v1 "k8s.io/api/networking/v1"
+	gatewayapi_v1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayapi_v1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gatewayapi_v1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
+	contour_api_v1alpha1 "github.com/projectcontour/contour/apis/projectcontour/v1alpha1"
 	"github.com/projectcontour/contour/internal/annotation"
 	"github.com/projectcontour/contour/internal/ref"
 	"github.com/projectcontour/contour/internal/timeout"
@@ -185,10 +187,9 @@ func headersPolicyRoute(policy *contour_api_v1.HeadersPolicy, allowHostRewrite b
 			if extractedHostRewriteHeader := extractHostRewriteHeaderValue(entry.Value); extractedHostRewriteHeader != "" {
 				hostRewriteHeader = http.CanonicalHeaderKey(extractedHostRewriteHeader)
 				continue
-			} else {
-				hostRewrite = entry.Value
-				continue
 			}
+			hostRewrite = entry.Value
+			continue
 		}
 		if msgs := validation.IsHTTPHeaderName(key); len(msgs) != 0 {
 			return nil, fmt.Errorf("invalid set header %q: %v", key, msgs)
@@ -253,7 +254,7 @@ func headersPolicyGatewayAPI(hf *gatewayapi_v1beta1.HTTPHeaderFilter, headerPoli
 				errlist = append(errlist, fmt.Errorf("duplicate header addition: %q", key))
 				continue
 			}
-			if key == "Host" && (headerPolicyType == string(gatewayapi_v1beta1.HTTPRouteFilterRequestHeaderModifier) ||
+			if key == "Host" && (headerPolicyType == string(gatewayapi_v1.HTTPRouteFilterRequestHeaderModifier) ||
 				headerPolicyType == string(gatewayapi_v1alpha2.GRPCRouteFilterRequestHeaderModifier)) {
 				hostRewrite = header.Value
 				continue
@@ -808,4 +809,28 @@ func loadBalancerRequestHashPolicies(lbp *contour_api_v1.LoadBalancerPolicy, val
 		return nil, strategy
 	}
 
+}
+
+func serviceCircuitBreakerPolicy(s *Service, cb *contour_api_v1alpha1.GlobalCircuitBreakerDefaults) *Service {
+	if s == nil {
+		return nil
+	}
+
+	if s.MaxConnections == 0 && cb != nil {
+		s.MaxConnections = cb.MaxConnections
+	}
+
+	if s.MaxPendingRequests == 0 && cb != nil {
+		s.MaxPendingRequests = cb.MaxPendingRequests
+	}
+
+	if s.MaxRequests == 0 && cb != nil {
+		s.MaxRequests = cb.MaxRequests
+	}
+
+	if s.MaxRetries == 0 && cb != nil {
+		s.MaxRetries = cb.MaxRetries
+	}
+
+	return s
 }

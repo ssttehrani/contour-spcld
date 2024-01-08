@@ -59,9 +59,9 @@ func EnsureXDSSecrets(ctx context.Context, cli client.Client, contour *model.Con
 	for _, secret := range secrets {
 		// Add owner & user-defined labels.
 		if secret.Labels == nil {
-			secret.Labels = model.CommonLabels(contour)
+			secret.Labels = contour.CommonLabels()
 		} else {
-			for k, v := range model.CommonLabels(contour) {
+			for k, v := range contour.CommonLabels() {
 				secret.Labels[k] = v
 			}
 		}
@@ -73,6 +73,10 @@ func EnsureXDSSecrets(ctx context.Context, cli client.Client, contour *model.Con
 			secret.Annotations = map[string]string{}
 		}
 		secret.Annotations[generatedByVersionAnnotation] = tagFromImage(image)
+
+		for k, v := range contour.CommonAnnotations() {
+			secret.Annotations[k] = v
+		}
 
 		if err := cli.Create(ctx, secret); err != nil {
 			if !errors.IsAlreadyExists(err) {
@@ -134,7 +138,7 @@ func EnsureXDSSecretsDeleted(ctx context.Context, cli client.Client, contour *mo
 			},
 		}
 
-		if err := cli.Delete(context.Background(), s); err != nil && !errors.IsNotFound(err) {
+		if err := cli.Delete(ctx, s); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
 	}
