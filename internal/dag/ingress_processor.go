@@ -28,10 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 	networking_v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/projectcontour/contour/internal/annotation"
-	"github.com/projectcontour/contour/internal/k8s"
-	"github.com/projectcontour/contour/internal/ref"
 )
 
 // IngressProcessor translates Ingresses into DAG
