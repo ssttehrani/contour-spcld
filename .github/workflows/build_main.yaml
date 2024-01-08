@@ -1,9 +1,11 @@
-name: Build and push :main image
+name: Build and push image
 
 on:
   push:
-    branches:
-      - snappcloud
+    branches: [ snappcloud ]
+    tags: [ v* ]
+  pull_request:
+    branches: [ snappcloud ]
 
 env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
