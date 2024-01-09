@@ -27,7 +27,7 @@ jobs:
     - name: Build and Push to GHCR
       env:
         REGISTRY: ghcr.io/${{ github.repository }}
-        VERSION: snappcloud
+        #VERSION: snappcloud
         TAG_LATEST: "false"
         PUSH_IMAGE: "true"
       run: |
