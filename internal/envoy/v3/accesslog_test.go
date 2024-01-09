@@ -121,6 +121,7 @@ func TestJSONFileAccessLog(t *testing.T) {
 						Path: "/dev/stdout",
 						AccessLogFormat: &envoy_file_v3.FileAccessLog_LogFormat{
 							LogFormat: &envoy_config_core_v3.SubstitutionFormatString{
+								OmitEmptyValues: true,
 								Format: &envoy_config_core_v3.SubstitutionFormatString_JsonFormat{
 									JsonFormat: &structpb.Struct{
 										Fields: map[string]*structpb.Value{
@@ -151,6 +152,7 @@ func TestJSONFileAccessLog(t *testing.T) {
 						Path: "/dev/stdout",
 						AccessLogFormat: &envoy_file_v3.FileAccessLog_LogFormat{
 							LogFormat: &envoy_config_core_v3.SubstitutionFormatString{
+								OmitEmptyValues: true,
 								Format: &envoy_config_core_v3.SubstitutionFormatString_JsonFormat{
 									JsonFormat: &structpb.Struct{
 										Fields: map[string]*structpb.Value{
@@ -244,6 +246,7 @@ func TestAccessLogLevel(t *testing.T) {
 				Path: "/dev/stdout",
 				AccessLogFormat: &envoy_file_v3.FileAccessLog_LogFormat{
 					LogFormat: &envoy_config_core_v3.SubstitutionFormatString{
+						OmitEmptyValues: true,
 						Format: &envoy_config_core_v3.SubstitutionFormatString_JsonFormat{
 							JsonFormat: &structpb.Struct{
 								Fields: map[string]*structpb.Value{},
