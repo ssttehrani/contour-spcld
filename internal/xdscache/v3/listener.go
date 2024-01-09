@@ -506,8 +506,8 @@ func (c *ListenerCache) OnChange(root *dag.DAG) {
 
 				filters = envoy_v3.Filters(cm)
 
-				if len(vh.HttpVersions) != 0 {
-					alpnProtos = vh.HttpVersions
+				if len(vh.HTTPVersions) != 0 {
+					alpnProtos = vh.HTTPVersions
 				} else {
 					alpnProtos = envoy_v3.ProtoNamesForVersions(cfg.DefaultHTTPVersions...)
 				}
