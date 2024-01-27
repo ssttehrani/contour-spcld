@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	"github.com/projectcontour/contour/internal/status"
 	"github.com/projectcontour/contour/internal/timeout"
 )
@@ -852,6 +853,15 @@ type ExternalAuthorization struct {
 	// requests are forwarded to for authorization. If nil, no
 	// authorization is enabled for this host.
 	AuthorizationService *ExtensionCluster
+
+	// ServiceAPIType defines the external authorization service API type.
+	// It indicates the protocol implemented by the external server, specifying whether it's a raw HTTP authorization server
+	// or a gRPC authorization server.
+	ServiceAPIType contour_api_v1.AuthorizationServiceAPIType
+
+	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
+	// Only required for http services.
+	ServerURI string
 
 	// AuthorizationResponseTimeout sets how long the proxy should wait
 	// for authorization server responses.

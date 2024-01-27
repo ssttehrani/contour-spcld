@@ -228,6 +228,15 @@ type ExtensionServiceReference struct {
 	Name string `json:"name,omitempty" protobuf:"bytes,3,opt,name=name"`
 }
 
+// AuthorizationServiceType is an alias to enforce validation
+// +kubebuilder:validation:Enum=grpc;http
+type AuthorizationServiceAPIType string
+
+const (
+	AuthorizationGRPCService AuthorizationServiceAPIType = "grpc"
+	AuthorizationHTTPService AuthorizationServiceAPIType = "http"
+)
+
 // AuthorizationServer configures an external server to authenticate
 // client requests. The external server must implement the v3 Envoy
 // external authorization GRPC protocol (https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/auth/v3/external_auth.proto).
@@ -236,6 +245,18 @@ type AuthorizationServer struct {
 	//
 	// +optional
 	ExtensionServiceRef ExtensionServiceReference `json:"extensionRef,omitempty"`
+
+	// ServiceAPIType defines the external authorization service API type.
+	// It indicates the protocol implemented by the external server, specifying whether it's a raw HTTP authorization server
+	// or a gRPC authorization server.
+	//
+	// +optional
+	ServiceAPIType AuthorizationServiceAPIType `json:"serviceAPIType,omitempty"`
+
+	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
+	// Only required for http services.
+	// +optional
+	ServerURI string `json:"serverURI,omitempty"`
 
 	// AuthPolicy sets a default authorization policy for client requests.
 	// This policy will be used unless overridden by individual routes.

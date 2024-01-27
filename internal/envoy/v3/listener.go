@@ -41,6 +41,7 @@ import (
 	envoy_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	envoy_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	contour_api_v1alpha1 "github.com/projectcontour/contour/apis/projectcontour/v1alpha1"
 	"github.com/projectcontour/contour/internal/dag"
 	"github.com/projectcontour/contour/internal/envoy"
@@ -780,9 +781,6 @@ end
 // requested parameters.
 func FilterExternalAuthz(externalAuthorization *dag.ExternalAuthorization) *http.HttpFilter {
 	authConfig := envoy_config_filter_http_ext_authz_v3.ExtAuthz{
-		Services: &envoy_config_filter_http_ext_authz_v3.ExtAuthz_GrpcService{
-			GrpcService: GrpcService(externalAuthorization.AuthorizationService.Name, externalAuthorization.AuthorizationService.SNI, externalAuthorization.AuthorizationResponseTimeout),
-		},
 		// Pretty sure we always want this. Why have an
 		// external auth service if it is not going to affect
 		// routing decisions?
@@ -791,11 +789,31 @@ func FilterExternalAuthz(externalAuthorization *dag.ExternalAuthorization) *http
 		StatusOnError: &envoy_type.HttpStatus{
 			Code: envoy_type.StatusCode_Forbidden,
 		},
-		MetadataContextNamespaces: []string{},
-		IncludePeerCertificate:    true,
 		// TODO(jpeach): When we move to the Envoy v4 API, propagate the
 		// `transport_api_version` from ExtensionServiceSpec ProtocolVersion.
-		TransportApiVersion: envoy_core_v3.ApiVersion_V3,
+		TransportApiVersion:    envoy_core_v3.ApiVersion_V3,
+		IncludePeerCertificate: true,
+	}
+
+	switch externalAuthorization.ServiceAPIType {
+	case contour_api_v1.AuthorizationGRPCService:
+		authConfig.Services = &envoy_config_filter_http_ext_authz_v3.ExtAuthz_GrpcService{
+			GrpcService: GrpcService(externalAuthorization.AuthorizationService.Name, externalAuthorization.AuthorizationService.SNI, externalAuthorization.AuthorizationResponseTimeout),
+		}
+		authConfig.MetadataContextNamespaces = []string{}
+
+	case contour_api_v1.AuthorizationHTTPService:
+		authConfig.Services = &envoy_config_filter_http_ext_authz_v3.ExtAuthz_HttpService{
+			HttpService: &envoy_config_filter_http_ext_authz_v3.HttpService{
+				ServerUri: &envoy_core_v3.HttpUri{
+					Uri: externalAuthorization.ServerURI,
+					HttpUpstreamType: &envoy_core_v3.HttpUri_Cluster{
+						Cluster: externalAuthorization.AuthorizationService.Name,
+					},
+					Timeout: envoy.Timeout(externalAuthorization.AuthorizationResponseTimeout),
+				},
+			},
+		}
 	}
 
 	if externalAuthorization.AuthorizationServerWithRequestBody != nil {

@@ -1375,10 +1375,25 @@ func (p *HTTPProxyProcessor) computeVirtualHostAuthorization(auth *contour_api_v
 		return nil
 	}
 
+	if auth.ServiceAPIType == contour_api_v1.AuthorizationHTTPService && auth.ServerURI == "" {
+		validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthBadServerURI",
+			"Spec.Virtualhost.Authorization.ServerURI is not set and it is required for http type")
+
+		return nil
+	}
+
 	globalExternalAuthorization := &ExternalAuthorization{
 		AuthorizationService:         ext,
 		AuthorizationFailOpen:        auth.FailOpen,
 		AuthorizationResponseTimeout: *respTimeout,
+	}
+
+	switch auth.ServiceAPIType {
+	case contour_api_v1.AuthorizationGRPCService:
+		globalExternalAuthorization.ServiceAPIType = contour_api_v1.AuthorizationGRPCService
+	case contour_api_v1.AuthorizationHTTPService:
+		globalExternalAuthorization.ServiceAPIType = contour_api_v1.AuthorizationHTTPService
+		globalExternalAuthorization.ServerURI = auth.ServerURI
 	}
 
 	if auth.WithRequestBody != nil {
