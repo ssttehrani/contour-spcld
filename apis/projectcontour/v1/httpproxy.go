@@ -229,7 +229,6 @@ type ExtensionServiceReference struct {
 }
 
 // AuthorizationServiceType is an alias to enforce validation
-// +kubebuilder:validation:Enum=grpc;http
 type AuthorizationServiceAPIType string
 
 const (
@@ -251,6 +250,8 @@ type AuthorizationServer struct {
 	// or a gRPC authorization server.
 	//
 	// +optional
+	// +kubebuilder:validation:Enum=http;grpc
+	// +kubebuilder:default=grpc
 	ServiceAPIType AuthorizationServiceAPIType `json:"serviceAPIType,omitempty"`
 
 	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
