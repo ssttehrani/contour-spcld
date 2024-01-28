@@ -640,6 +640,21 @@ spec:
                       timeout.
                     pattern: ^(((\d*(\.\d*)?h)|(\d*(\.\d*)?m)|(\d*(\.\d*)?s)|(\d*(\.\d*)?ms)|(\d*(\.\d*)?us)|(\d*(\.\d*)?µs)|(\d*(\.\d*)?ns))+|infinity|infinite)$
                     type: string
+                  serverURI:
+                    description: ServerURI sets the URI of the external HTTP authorization
+                      server to which authorization requests must be sent. Only required
+                      for http services.
+                    type: string
+                  serviceAPIType:
+                    default: grpc
+                    description: ServiceAPIType defines the external authorization
+                      service API type. It indicates the protocol implemented by the
+                      external server, specifying whether it's a raw HTTP authorization
+                      server or a gRPC authorization server.
+                    enum:
+                    - http
+                    - grpc
+                    type: string
                   withRequestBody:
                     description: WithRequestBody specifies configuration for sending
                       the client request's body to authorization server.
@@ -4300,6 +4315,21 @@ spec:
                           no timeout.
                         pattern: ^(((\d*(\.\d*)?h)|(\d*(\.\d*)?m)|(\d*(\.\d*)?s)|(\d*(\.\d*)?ms)|(\d*(\.\d*)?us)|(\d*(\.\d*)?µs)|(\d*(\.\d*)?ns))+|infinity|infinite)$
                         type: string
+                      serverURI:
+                        description: ServerURI sets the URI of the external HTTP authorization
+                          server to which authorization requests must be sent. Only
+                          required for http services.
+                        type: string
+                      serviceAPIType:
+                        default: grpc
+                        description: ServiceAPIType defines the external authorization
+                          service API type. It indicates the protocol implemented
+                          by the external server, specifying whether it's a raw HTTP
+                          authorization server or a gRPC authorization server.
+                        enum:
+                        - http
+                        - grpc
+                        type: string
                       withRequestBody:
                         description: WithRequestBody specifies configuration for sending
                           the client request's body to authorization server.
@@ -4961,6 +4991,7 @@ spec:
                   used to reach this Service. Values may be h2 or h2c. If omitted,
                   protocol-selection falls back on Service annotations.
                 enum:
+                - h1
                 - h2
                 - h2c
                 type: string
@@ -7223,6 +7254,21 @@ spec:
                           "h". The string "infinity" is also a valid input and specifies
                           no timeout.
                         pattern: ^(((\d*(\.\d*)?h)|(\d*(\.\d*)?m)|(\d*(\.\d*)?s)|(\d*(\.\d*)?ms)|(\d*(\.\d*)?us)|(\d*(\.\d*)?µs)|(\d*(\.\d*)?ns))+|infinity|infinite)$
+                        type: string
+                      serverURI:
+                        description: ServerURI sets the URI of the external HTTP authorization
+                          server to which authorization requests must be sent. Only
+                          required for http services.
+                        type: string
+                      serviceAPIType:
+                        default: grpc
+                        description: ServiceAPIType defines the external authorization
+                          service API type. It indicates the protocol implemented
+                          by the external server, specifying whether it's a raw HTTP
+                          authorization server or a gRPC authorization server.
+                        enum:
+                        - http
+                        - grpc
                         type: string
                       withRequestBody:
                         description: WithRequestBody specifies configuration for sending

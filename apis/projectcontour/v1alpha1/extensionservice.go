@@ -80,7 +80,7 @@ type ExtensionServiceSpec struct {
 	// Values may be h2 or h2c. If omitted, protocol-selection falls back on Service annotations.
 	//
 	// +optional
-	// +kubebuilder:validation:Enum=h1,h2;h2c
+	// +kubebuilder:validation:Enum=h1;h2;h2c
 	Protocol *string `json:"protocol,omitempty"`
 
 	// The policy for load balancing GRPC service requests. Note that the
