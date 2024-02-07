@@ -1375,12 +1375,21 @@ func (p *HTTPProxyProcessor) computeVirtualHostAuthorization(auth *contour_api_v
 		return nil
 	}
 
-	if auth.ServiceAPIType == contour_api_v1.AuthorizationHTTPService && auth.ServerURI == "" {
-		validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthBadServerURI",
-			"Spec.Virtualhost.Authorization.ServerURI is not set and it is required for http type")
+	if auth.ServiceAPIType == contour_api_v1.AuthorizationHTTPService && auth.HttpServerSettings == nil {
+		validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthNilHttpSettings",
+			"Spec.Virtualhost.Authorization.HttpServerSettings is not set and it is required for http type")
 
 		return nil
 	}
+
+	// Not required due to Kubernetes API server validation.
+	//
+	// if auth.ServiceAPIType == contour_api_v1.AuthorizationHTTPService && auth.HttpServerSettings.ServerURI == "" {
+	// 	validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthBadServerURI",
+	// 		"Spec.Virtualhost.Authorization.HttpServerSettings.ServerURI is not set or it's empty and it is required for http type")
+
+	// 	return nil
+	// }
 
 	globalExternalAuthorization := &ExternalAuthorization{
 		AuthorizationService:         ext,
@@ -1393,7 +1402,30 @@ func (p *HTTPProxyProcessor) computeVirtualHostAuthorization(auth *contour_api_v
 		globalExternalAuthorization.ServiceAPIType = contour_api_v1.AuthorizationGRPCService
 	case contour_api_v1.AuthorizationHTTPService:
 		globalExternalAuthorization.ServiceAPIType = contour_api_v1.AuthorizationHTTPService
-		globalExternalAuthorization.ServerURI = auth.ServerURI
+		globalExternalAuthorization.HttpPathPrefix = auth.HttpServerSettings.PathPrefix
+		// globalExternalAuthorization.HttpServerURI = auth.HttpServerSettings.ServerURI
+
+		if auth.HttpServerSettings.AllowedAuthorizationHeaders != nil {
+			if err := ExternalAuthAllowedHeadersValid(auth.HttpServerSettings.AllowedAuthorizationHeaders); err != nil {
+				validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthBadAllowedHeader",
+					err.Error())
+
+				return nil
+			}
+
+			globalExternalAuthorization.HttpAllowedAuthorizationHeaders = auth.HttpServerSettings.AllowedAuthorizationHeaders
+		}
+
+		if auth.HttpServerSettings.AllowedUpstreamHeaders != nil {
+			if err := ExternalAuthAllowedHeadersValid(auth.HttpServerSettings.AllowedUpstreamHeaders); err != nil {
+				validCond.AddErrorf(contour_api_v1.ConditionTypeAuthError, "AuthBadAllowedHeader",
+					err.Error())
+
+				return nil
+			}
+
+			globalExternalAuthorization.HttpAllowedUpstreamHeaders = auth.HttpServerSettings.AllowedUpstreamHeaders
+		}
 	}
 
 	if auth.WithRequestBody != nil {

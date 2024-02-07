@@ -859,9 +859,23 @@ type ExternalAuthorization struct {
 	// or a gRPC authorization server.
 	ServiceAPIType contour_api_v1.AuthorizationServiceAPIType
 
-	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
+	// HttpAllowedAuthorizationHeaders specifies client request headers that will be sent to the authorization server.
+	// Note that in addition to the the user’s supplied matchers, Host, Method, Path, Content-Length, and Authorization are additionally included in the list.
+	HttpAllowedAuthorizationHeaders []contour_api_v1.HttpAuthorizationServerAllowedHeaders
+
+	// HttpAllowedUpstreamHeaders specifies authorization response headers that will be added to the original client request.
+	// Note that coexistent headers will be overridden.
+	HttpAllowedUpstreamHeaders []contour_api_v1.HttpAuthorizationServerAllowedHeaders
+
+	// HttpPathPrefix Sets a prefix to the value of authorization request header Path.
+	HttpPathPrefix string
+
+	// Note: This field is not used by Envoy
+	// https://github.com/envoyproxy/envoy/issues/5357
+	//
+	// HttpServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
 	// Only required for http services.
-	ServerURI string
+	// HttpServerURI string
 
 	// AuthorizationResponseTimeout sets how long the proxy should wait
 	// for authorization server responses.

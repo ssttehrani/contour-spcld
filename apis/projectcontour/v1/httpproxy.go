@@ -254,10 +254,10 @@ type AuthorizationServer struct {
 	// +kubebuilder:default=grpc
 	ServiceAPIType AuthorizationServiceAPIType `json:"serviceAPIType,omitempty"`
 
-	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
-	// Only required for http services.
+	// HttpAuthorizationServerSettings defines configurations for interacting with an external HTTP authorization server.
+	//
 	// +optional
-	ServerURI string `json:"serverURI,omitempty"`
+	HttpServerSettings *HttpAuthorizationServerSettings `json:"httpSettings,omitempty"`
 
 	// AuthPolicy sets a default authorization policy for client requests.
 	// This policy will be used unless overridden by individual routes.
@@ -285,6 +285,75 @@ type AuthorizationServer struct {
 	// WithRequestBody specifies configuration for sending the client request's body to authorization server.
 	// +optional
 	WithRequestBody *AuthorizationServerBufferSettings `json:"withRequestBody,omitempty"`
+}
+
+// HttpAuthorizationServerSettings defines configurations for interacting with an external HTTP authorization server.
+type HttpAuthorizationServerSettings struct {
+	// PathPrefix Sets a prefix to the value of authorization request header Path.
+	//
+	// +optional
+	PathPrefix string `json:"pathPrefix,omitempty"`
+
+	// Note: This field is not used by Envoy
+	// https://github.com/envoyproxy/envoy/issues/5357
+	//
+	// ServerURI sets the URI of the external HTTP authorization server to which authorization requests must be sent.
+	//
+	// // +required
+	// // +kubebuilder:validation:Pattern=`^https?://[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*(\/[^\s]*)?$`
+	// ServerURI string `json:"serverURI"`
+
+	// AllowedAuthorizationHeaders specifies client request headers that will be sent to the authorization server.
+	// Note that in addition to the the user’s supplied matchers, Host, Method, Path, Content-Length, and Authorization are additionally included in the list.
+	//
+	// +optional
+	AllowedAuthorizationHeaders []HttpAuthorizationServerAllowedHeaders `json:"allowedAuthorizationHeaders,omitempty"`
+
+	// AllowedUpstreamHeaders specifies authorization response headers that will be added to the original client request.
+	// Note that coexistent headers will be overridden.
+	//
+	// +optional
+	AllowedUpstreamHeaders []HttpAuthorizationServerAllowedHeaders `json:"allowedUpstreamHeaders,omitempty"`
+}
+
+// HttpAuthorizationServerAllowedHeaders specifies how to conditionally match against allowed headers
+// in the context of HTTP authorization. It includes options such as Exact, Prefix, Suffix,
+// Contains, and IgnoreCase to customize header matching criteria. However, regex support
+// is intentionally excluded to simplify the user experience and prevent potential issues.
+// One of Prefix, Exact, Suffix or Contains must be provided.
+type HttpAuthorizationServerAllowedHeaders struct {
+	// Exact specifies a string that the header name must be equal to.
+	//
+	// +optional
+	Exact string `json:"exact,omitempty"`
+
+	// Prefix defines a prefix match for the header name.
+	//
+	// +optional
+	Prefix string `json:"prefix,omitempty"`
+
+	// Suffix defines a suffix match for a header name.
+	//
+	// +optional
+	Suffix string `json:"suffix,omitempty"`
+
+	// To streamline user experience and mitigate potential issues, we do not support regex.
+	// Additionally, it's essential to ensure that any regex patterns adhere to the configured runtime key, re2.max_program_size.error_level
+	// by verifying that the program size is smaller than the specified value.
+	// This necessitates thorough validation of user input.
+	//
+	// Regex string `json:"regex,omitempty"`
+
+	// Contains specifies a substring that must be present in the header name.
+	//
+	// +optional
+	Contains string `json:"contains,omitempty"`
+
+	// IgnoreCase specifies that string matching should be case insensitive.
+	// Note that this has no effect on the Regex parameter.
+	//
+	// +optional
+	IgnoreCase bool `json:"ignoreCase,omitempty"`
 }
 
 // AuthorizationServerBufferSettings enables ExtAuthz filter to buffer client request data and send it as part of authorization request
