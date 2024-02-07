@@ -156,6 +156,7 @@ container: ## Build the Contour container image
 		--build-arg "BUILD_GOEXPERIMENT=$(BUILD_GOEXPERIMENT)" \
 		$(DOCKER_BUILD_LABELS) \
 		$(shell pwd) \
+		--platform linux/amd64 \
 		--tag $(IMAGE):$(VERSION)
 
 push: ## Push the Contour container image to the Docker registry

@@ -39,8 +39,10 @@ import (
 	http "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	tcp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoy_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	envoy_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	contour_api_v1alpha1 "github.com/projectcontour/contour/apis/projectcontour/v1alpha1"
 	"github.com/projectcontour/contour/internal/dag"
 	"github.com/projectcontour/contour/internal/envoy"
@@ -60,7 +62,7 @@ const (
 	HTTPVersion3    HTTPVersionType = http.HttpConnectionManager_HTTP3
 )
 
-// ProtoNamesForVersions returns the slice of ALPN protocol names for the give HTTP versions.
+// ProtoNamesForVersions returns the slice of ALPN protocol names for the given HTTP versions.
 func ProtoNamesForVersions(versions ...HTTPVersionType) []string {
 	protocols := map[HTTPVersionType]string{
 		HTTPVersion1: "http/1.1",
@@ -776,13 +778,61 @@ end
 	}
 }
 
+// ExternalAuthzAllowedHeaders returns the slice of StringMatcher for a given slice of HttpAuthorizationServerAllowedHeaders.
+func ExternalAuthzAllowedHeaders(allowedHeaders []contour_api_v1.HttpAuthorizationServerAllowedHeaders) []*envoy_matcher.StringMatcher {
+	var allowedHeaderPatterns []*envoy_matcher.StringMatcher
+
+	for _, allowedHeader := range allowedHeaders {
+		switch {
+		case allowedHeader.Exact != "":
+			allowedHeaderPatterns = append(allowedHeaderPatterns, &envoy_matcher.StringMatcher{
+				MatchPattern: &envoy_matcher.StringMatcher_Exact{
+					Exact: allowedHeader.Exact,
+				},
+				IgnoreCase: allowedHeader.IgnoreCase,
+			})
+		case allowedHeader.Prefix != "":
+			allowedHeaderPatterns = append(allowedHeaderPatterns, &envoy_matcher.StringMatcher{
+				MatchPattern: &envoy_matcher.StringMatcher_Prefix{
+					Prefix: allowedHeader.Prefix,
+				},
+				IgnoreCase: allowedHeader.IgnoreCase,
+			})
+		case allowedHeader.Suffix != "":
+			allowedHeaderPatterns = append(allowedHeaderPatterns, &envoy_matcher.StringMatcher{
+				MatchPattern: &envoy_matcher.StringMatcher_Suffix{
+					Suffix: allowedHeader.Suffix,
+				},
+				IgnoreCase: allowedHeader.IgnoreCase,
+			})
+		// To streamline user experience and mitigate potential issues, we do not support regex.
+		// Additionally, it's essential to ensure that any regex patterns adhere to the configured runtime key, re2.max_program_size.error_level
+		// by verifying that the program size is smaller than the specified value.
+		// This necessitates thorough validation of user input.
+		//
+		// case allowedHeader.Regex != "":
+		// 	allowedHeaderPatterns = append(allowedHeaderPatterns, &envoy_matcher.StringMatcher{
+		// 		MatchPattern: &envoy_matcher.StringMatcher_SafeRegex{
+		// 			SafeRegex: SafeRegexMatch(allowedHeader.Regex),
+		// 		},
+		// 	})
+		case allowedHeader.Contains != "":
+			allowedHeaderPatterns = append(allowedHeaderPatterns, &envoy_matcher.StringMatcher{
+				MatchPattern: &envoy_matcher.StringMatcher_Contains{
+					Contains: allowedHeader.Contains,
+				},
+				IgnoreCase: allowedHeader.IgnoreCase,
+			})
+		}
+	}
+
+	return allowedHeaderPatterns
+}
+
 // FilterExternalAuthz returns an `ext_authz` filter configured with the
 // requested parameters.
 func FilterExternalAuthz(externalAuthorization *dag.ExternalAuthorization) *http.HttpFilter {
 	authConfig := envoy_config_filter_http_ext_authz_v3.ExtAuthz{
-		Services: &envoy_config_filter_http_ext_authz_v3.ExtAuthz_GrpcService{
-			GrpcService: GrpcService(externalAuthorization.AuthorizationService.Name, externalAuthorization.AuthorizationService.SNI, externalAuthorization.AuthorizationResponseTimeout),
-		},
 		// Pretty sure we always want this. Why have an
 		// external auth service if it is not going to affect
 		// routing decisions?
@@ -791,11 +841,52 @@ func FilterExternalAuthz(externalAuthorization *dag.ExternalAuthorization) *http
 		StatusOnError: &envoy_type.HttpStatus{
 			Code: envoy_type.StatusCode_Forbidden,
 		},
-		MetadataContextNamespaces: []string{},
-		IncludePeerCertificate:    true,
 		// TODO(jpeach): When we move to the Envoy v4 API, propagate the
 		// `transport_api_version` from ExtensionServiceSpec ProtocolVersion.
-		TransportApiVersion: envoy_core_v3.ApiVersion_V3,
+		TransportApiVersion:    envoy_core_v3.ApiVersion_V3,
+		IncludePeerCertificate: true,
+	}
+
+	switch externalAuthorization.ServiceAPIType {
+	case contour_api_v1.AuthorizationGRPCService:
+		authConfig.Services = &envoy_config_filter_http_ext_authz_v3.ExtAuthz_GrpcService{
+			GrpcService: GrpcService(externalAuthorization.AuthorizationService.Name, externalAuthorization.AuthorizationService.SNI, externalAuthorization.AuthorizationResponseTimeout),
+		}
+		authConfig.MetadataContextNamespaces = []string{}
+
+	case contour_api_v1.AuthorizationHTTPService:
+		extAuthzService := &envoy_config_filter_http_ext_authz_v3.ExtAuthz_HttpService{
+			HttpService: &envoy_config_filter_http_ext_authz_v3.HttpService{
+				ServerUri: &envoy_core_v3.HttpUri{
+					// Uri: externalAuthorization.HttpServerURI,
+					Uri: "http://dummy/",
+					HttpUpstreamType: &envoy_core_v3.HttpUri_Cluster{
+						Cluster: externalAuthorization.AuthorizationService.Name,
+					},
+					Timeout: envoy.Timeout(externalAuthorization.AuthorizationResponseTimeout),
+				},
+			},
+		}
+
+		if pathPrefix := externalAuthorization.HttpPathPrefix; pathPrefix != "" {
+			extAuthzService.HttpService.PathPrefix = pathPrefix
+		}
+
+		if len(externalAuthorization.HttpAllowedAuthorizationHeaders) > 0 {
+			authConfig.AllowedHeaders = &envoy_matcher.ListStringMatcher{
+				Patterns: ExternalAuthzAllowedHeaders(externalAuthorization.HttpAllowedAuthorizationHeaders),
+			}
+		}
+
+		if len(externalAuthorization.HttpAllowedUpstreamHeaders) > 0 {
+			extAuthzService.HttpService.AuthorizationResponse = &envoy_config_filter_http_ext_authz_v3.AuthorizationResponse{
+				AllowedUpstreamHeaders: &envoy_matcher.ListStringMatcher{
+					Patterns: ExternalAuthzAllowedHeaders(externalAuthorization.HttpAllowedUpstreamHeaders),
+				},
+			}
+		}
+
+		authConfig.Services = extAuthzService
 	}
 
 	if externalAuthorization.AuthorizationServerWithRequestBody != nil {

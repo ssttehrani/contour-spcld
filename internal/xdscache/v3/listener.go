@@ -22,6 +22,7 @@ import (
 	http "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
+	contour_api_v1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	contour_api_v1alpha1 "github.com/projectcontour/contour/apis/projectcontour/v1alpha1"
 	"github.com/projectcontour/contour/internal/contour"
 	"github.com/projectcontour/contour/internal/contourconfig"
@@ -195,9 +196,14 @@ type RateLimitConfig struct {
 
 type GlobalExternalAuthConfig struct {
 	ExtensionServiceConfig
-	FailOpen        bool
-	Context         map[string]string
-	WithRequestBody *dag.AuthorizationServerBufferSettings
+	FailOpen                        bool
+	Context                         map[string]string
+	ServiceAPIType                  contour_api_v1.AuthorizationServiceAPIType
+	HttpAllowedAuthorizationHeaders []contour_api_v1.HttpAuthorizationServerAllowedHeaders
+	HttpAllowedUpstreamHeaders      []contour_api_v1.HttpAuthorizationServerAllowedHeaders
+	HttpPathPrefix                  string
+	WithRequestBody                 *dag.AuthorizationServerBufferSettings
+	// HttpServerURI                string
 }
 
 // httpAccessLog returns the access log for the HTTP (non TLS)
@@ -626,6 +632,10 @@ func httpGlobalExternalAuthConfig(config *GlobalExternalAuthConfig) *http.HttpFi
 			Name: dag.ExtensionClusterName(config.ExtensionServiceConfig.ExtensionService),
 			SNI:  config.ExtensionServiceConfig.SNI,
 		},
+		ServiceAPIType:                     config.ServiceAPIType,
+		HttpAllowedAuthorizationHeaders:    config.HttpAllowedAuthorizationHeaders,
+		HttpAllowedUpstreamHeaders:         config.HttpAllowedUpstreamHeaders,
+		HttpPathPrefix:                     config.HttpPathPrefix,
 		AuthorizationFailOpen:              config.FailOpen,
 		AuthorizationResponseTimeout:       config.ExtensionServiceConfig.Timeout,
 		AuthorizationServerWithRequestBody: config.WithRequestBody,
